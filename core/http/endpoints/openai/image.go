@@ -132,7 +132,7 @@ func ImageEndpoint(cl *config.BackendConfigLoader, ml *model.ModelLoader, appCon
 			config.Backend = model.StableDiffusionBackend
 		case "tinydream":
 			config.Backend = model.TinyDreamBackend
-		default:
+		case "":
 			config.Backend = model.StableDiffusionBackend
 			log.Info().Msgf("Default model to %s", model.StableDiffusionBackend)
 		}
