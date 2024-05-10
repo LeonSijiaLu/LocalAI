@@ -132,8 +132,9 @@ func ImageEndpoint(cl *config.BackendConfigLoader, ml *model.ModelLoader, appCon
 			config.Backend = model.StableDiffusionBackend
 		case "tinydream":
 			config.Backend = model.TinyDreamBackend
-		case "":
+		default:
 			config.Backend = model.StableDiffusionBackend
+			log.Info().Msgf("Default model to %s", model.StableDiffusionBackend)
 		}
 
 		sizeParts := strings.Split(input.Size, "x")
@@ -205,7 +206,7 @@ func ImageEndpoint(cl *config.BackendConfigLoader, ml *model.ModelLoader, appCon
 				if err != nil {
 					return err
 				}
-				if err := fn(); err != nil {
+				if err = fn(); err != nil {
 					return err
 				}
 
