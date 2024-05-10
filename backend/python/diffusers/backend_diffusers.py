@@ -18,7 +18,7 @@ import backend_pb2_grpc
 import grpc
 
 from diffusers import StableDiffusionXLPipeline, StableDiffusionDepth2ImgPipeline, DPMSolverMultistepScheduler, StableDiffusionPipeline, DiffusionPipeline, EulerAncestralDiscreteScheduler
-from diffusers import StableDiffusionImg2ImgPipeline, AutoPipelineForText2Image, ControlNetModel, StableVideoDiffusionPipeline
+from diffusers import StableDiffusionImg2ImgPipeline, AutoPipelineForText2Image, ControlNetModel, StableVideoDiffusionPipeline, StableDiffusionUpscalePipeline
 from diffusers.pipelines.stable_diffusion import safety_checker
 from diffusers.utils import load_image,export_to_video
 from compel import Compel, ReturnedEmbeddingsType
@@ -157,20 +157,20 @@ class BackendServicer(backend_pb2_grpc.BackendServicer):
             self.cfg_scale = 7
             if request.CFGScale != 0:
                 self.cfg_scale = request.CFGScale
-            
+
             clipmodel = "runwayml/stable-diffusion-v1-5"
             if request.CLIPModel != "":
                 clipmodel = request.CLIPModel
             clipsubfolder = "text_encoder"
             if request.CLIPSubfolder != "":
                 clipsubfolder = request.CLIPSubfolder
-            
+
             # Check if ModelFile exists
             if request.ModelFile != "":
                 if os.path.exists(request.ModelFile):
                     local = True
                     modelFile = request.ModelFile
-            
+
             fromSingleFile = request.Model.startswith("http") or request.Model.startswith("/") or local
             self.img2vid=False
             self.txt2vid=False
@@ -186,6 +186,16 @@ class BackendServicer(backend_pb2_grpc.BackendServicer):
             elif request.PipelineType == "StableDiffusionDepth2ImgPipeline":
                 self.pipe = StableDiffusionDepth2ImgPipeline.from_pretrained(request.Model,
                             torch_dtype=torchType)
+
+            ## img upscaler
+            elif request.PipelineType == "StableDiffusionUpscalePipeline":
+                if fromSingleFile:
+                    self.pipe = StableDiffusionUpscalePipeline.from_single_file(modelFile,
+                                                                        torch_dtype=torchType)
+                else:
+                    self.pipe = StableDiffusionUpscalePipeline.from_pretrained(request.Model,
+                                                                       torch_dtype=torchType)
+
             ## img2vid
             elif request.PipelineType == "StableVideoDiffusionPipeline":
                 self.img2vid=True
@@ -198,7 +208,7 @@ class BackendServicer(backend_pb2_grpc.BackendServicer):
             elif request.PipelineType == "AutoPipelineForText2Image" or request.PipelineType == "":
                 self.pipe = AutoPipelineForText2Image.from_pretrained(request.Model,
                                                     torch_dtype=torchType,
-                                                    use_safetensors=SAFETENSORS, 
+                                                    use_safetensors=SAFETENSORS,
                                                     variant=variant)
             elif request.PipelineType == "StableDiffusionPipeline":
                 if fromSingleFile:
@@ -221,24 +231,24 @@ class BackendServicer(backend_pb2_grpc.BackendServicer):
                                                                use_safetensors=True)
                 else:
                     self.pipe = StableDiffusionXLPipeline.from_pretrained(
-                        request.Model, 
-                        torch_dtype=torchType, 
-                        use_safetensors=True, 
+                        request.Model,
+                        torch_dtype=torchType,
+                        use_safetensors=True,
                         variant=variant)
 
             if CLIPSKIP and request.CLIPSkip != 0:
                 self.clip_skip = request.CLIPSkip
             else:
                 self.clip_skip = 0
-            
+
             # torch_dtype needs to be customized. float16 for GPU, float32 for CPU
             # TODO: this needs to be customized
             if request.SchedulerType != "":
                 self.pipe.scheduler = get_scheduler(request.SchedulerType, self.pipe.scheduler.config)
-                
+
             if COMPEL:
                 self.compel = Compel(
-                    tokenizer=[self.pipe.tokenizer, self.pipe.tokenizer_2 ], 
+                    tokenizer=[self.pipe.tokenizer, self.pipe.tokenizer_2 ],
                     text_encoder=[self.pipe.text_encoder, self.pipe.text_encoder_2],
                     returned_embeddings_type=ReturnedEmbeddingsType.PENULTIMATE_HIDDEN_STATES_NON_NORMALIZED,
                     requires_pooled=[False, True]
@@ -347,8 +357,8 @@ class BackendServicer(backend_pb2_grpc.BackendServicer):
 
         # create a dictionary of values for the parameters
         options = {
-            "negative_prompt":     request.negative_prompt, 
-            "width":               request.width, 
+            "negative_prompt":     request.negative_prompt,
+            "width":               request.width,
             "height":              request.height,
             "num_inference_steps": steps,
         }
@@ -405,7 +415,7 @@ class BackendServicer(backend_pb2_grpc.BackendServicer):
             image = self.pipe(
                 guidance_scale=self.cfg_scale,
                 **kwargs
-                ).images[0] 
+                ).images[0]
         else:
             # pass the kwargs dictionary to the self.pipe method
             image = self.pipe(
